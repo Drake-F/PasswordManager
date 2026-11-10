@@ -13,17 +13,10 @@ NONCE_SIZE = 12
 def encrypt_file(file_path: str, master_password: str, plaintext: bytes):
     source = Path(file_path)
 
-    if not source.is_absolute():
-        source = Path(__file__).resolve().parent / source
-
-    if not source.is_file():
-        raise FileNotFoundError("File specified by user does not exist.")
-
     salt = secrets.token_bytes(SALT_SIZE)
     nonce = secrets.token_bytes(NONCE_SIZE)
 
     key = get_key(master_password, salt)
-
     ciphertext = AESGCM(key).encrypt(nonce, plaintext, MAGIC)
 
     encrypted_data = MAGIC + salt + nonce + ciphertext

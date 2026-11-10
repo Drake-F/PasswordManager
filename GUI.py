@@ -6,13 +6,8 @@ from tkinter import ttk, messagebox, filedialog
 from PasswordGenerator import generate_password
 from Encryption import encrypt_file, decrypt_file
 
-# Need to setup file writing/encryption when data get's added or removed
-# Add clearing of clipboard after 30s when copying the username and password from the entries
-# Add a way to clear the generated password, add a way to toggle the view of the password fields in the vault controls and add entries tab
-# Add a way to have the passwords in the entries tab be hidden unless we click a button to see them ourselves
+# Make a way for new users to create their first encrypted file - part of the installer/startup?
 # Finally, make it a desktop icon and package it all for github
-# Clear Entry data when vault is locked as it currently stays loaded in the entry fields
-# Make a way for new users to create their first encrypted file
 
 class PasswordManagerGUI:
     def __init__(self, root):
@@ -115,6 +110,16 @@ class PasswordManagerGUI:
         self.master_entry.bind(
             "<Return>", lambda _event: self.toggle_session()
         )
+
+        self.master_visibility_button = ttk.Button(
+            frame,
+            text="Show",
+            command=lambda: self.toggle_password_visibility(
+                self.master_entry,
+                self.master_visibility_button
+            )
+        )
+        self.master_visibility_button.grid(row=1, column=2, padx=(5, 0), pady=5)
 
         # Lock / Unlock controls
         self.unlock_button = ttk.Button(
@@ -220,7 +225,7 @@ class PasswordManagerGUI:
 
         self.generated_var = tk.StringVar()
         self.generated_entry = ttk.Entry(
-            frame, textvariable=self.generated_var, state="readonly"
+            frame, textvariable=self.generated_var
         )
         self.generated_entry.grid(
             row=6, column=1, sticky="ew", pady=(10, 4)
@@ -228,7 +233,7 @@ class PasswordManagerGUI:
 
         # Buttons - row 7
         actions = ttk.Frame(frame)
-        actions.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+        actions.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(5, 0))
 
         ttk.Button(
             actions, text="Generate", command=self.gen_pass
@@ -236,6 +241,10 @@ class PasswordManagerGUI:
 
         ttk.Button(
             actions, text="Copy", command=self.copy_generated
+        ).pack(side="left", expand=True, fill="x", padx=(4, 4))
+        
+        ttk.Button(
+            actions, text="Clear", command=self.clear_generated_password
         ).pack(side="left", expand=True, fill="x", padx=(4, 0))
 
     def gen_pass(self):
@@ -256,29 +265,51 @@ class PasswordManagerGUI:
         self.username_var = tk.StringVar()
         self.password_var = tk.StringVar()
 
-        fields = [
-            ("Site / URL:", self.site_var, False),
-            ("User:", self.username_var, False),
-            ("Pass:", self.password_var, True),
-        ]
-        for row, (label, variable, hidden) in enumerate(fields):
-            ttk.Label(frame, text=label).grid(
-                row=row, column=0, sticky="e", padx=(0, 8), pady=6
+        # Site
+        ttk.Label(frame, text="Site / URL:").grid(
+            row=0, column=0, sticky="e", padx=(0, 8), pady=6
+        )
+        self.site_entry = ttk.Entry(frame, textvariable=self.site_var)
+        self.site_entry.grid(row=0, column=1, sticky="ew", pady=6)
+
+        # Username
+        ttk.Label(frame, text="User:").grid(
+            row=1, column=0, sticky="e", padx=(0, 8), pady=6
+        )
+        self.username_entry = ttk.Entry(frame, textvariable=self.username_var)
+        self.username_entry.grid(row=1, column=1, sticky="ew", pady=6)
+
+        # Password
+        ttk.Label(frame, text="Pass:").grid(
+            row=2, column=0, sticky="e", padx=(0, 8), pady=6
+        )
+
+        self.password_entry = ttk.Entry(
+            frame, textvariable=self.password_var, show="*"
+        )
+        self.password_entry.grid(row=2, column=1, sticky="ew", pady=6)
+
+        # Password visibility toggle
+        self.password_visibility_button = ttk.Button(
+            frame,
+            text="Show",
+            command=lambda: self.toggle_password_visibility(
+                self.password_entry,
+                self.password_visibility_button
             )
-            ttk.Entry(
-                frame, textvariable=variable,
-                show="*" if hidden else ""
-            ).grid(row=row, column=1, sticky="ew", pady=6)
+        )
+        
+        self.password_visibility_button.grid(row=3, column=0, columnspan=2, sticky="ew", padx=25)
 
         ttk.Button(
             frame, text="Add Entry", style="Action.TButton",
             command=self.add_entry
-        ).grid(row=3, column=0, columnspan=2, sticky="ew", padx=25, pady=14)
+        ).grid(row=4, column=0, columnspan=2, sticky="ew", padx=25, pady=14)
 
         ttk.Button(
             frame, text="Use Generated Password",
             command=self.use_generated_password
-        ).grid(row=4, column=0, columnspan=2, sticky="ew", padx=25)
+        ).grid(row=5, column=0, columnspan=2, sticky="ew", padx=25)
 
     def _build_entries_panel(self, parent):
         frame = self._panel(parent, "Entries", 1, 1)
@@ -308,6 +339,7 @@ class PasswordManagerGUI:
         self.detail_user = tk.StringVar()
         self.detail_pass = tk.StringVar()
 
+        # Entry Details fields
         for row, (label, variable) in enumerate([
             ("Site:", self.detail_site),
             ("User:", self.detail_user),
@@ -316,22 +348,56 @@ class PasswordManagerGUI:
             ttk.Label(details, text=label).grid(
                 row=row, column=0, sticky="e", padx=(0, 8), pady=3
             )
-            entry = ttk.Entry(details, textvariable=variable, state="readonly")
+
+            if variable == self.detail_pass:
+                entry = ttk.Entry(
+                    details, textvariable=variable,
+                    state="readonly", show="*"
+                )
+                self.detail_password_entry = entry
+            else:
+                entry = ttk.Entry(
+                    details, textvariable=variable, state="readonly"
+                )
+
             entry.grid(row=row, column=1, sticky="ew", pady=3)
 
+        # Action Buttons area
         buttons = ttk.Frame(frame)
-        buttons.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        buttons.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+
+        # Show / Hide Password (full width)
+        self.detail_password_visibility_button = ttk.Button(
+            buttons,
+            text="Show Password",
+            command=lambda: self.toggle_password_visibility(
+                self.detail_password_entry,
+                self.detail_password_visibility_button
+            )
+        )
+        self.detail_password_visibility_button.grid(
+            row=0, column=0, columnspan=3, sticky="ew", pady=(0, 5)
+        )
+
+        # Three existing action buttons
         ttk.Button(
             buttons, text="Copy Username",
             command=lambda: self.copy_text(self.detail_user.get())
-        ).pack(side="left", expand=True, fill="x", padx=(0, 4))
+        ).grid(row=1, column=0, sticky="ew", padx=(0, 4))
+
         ttk.Button(
             buttons, text="Copy Password",
             command=lambda: self.copy_text(self.detail_pass.get())
-        ).pack(side="left", expand=True, fill="x", padx=4)
+        ).grid(row=1, column=1, sticky="ew", padx=4)
+
         ttk.Button(
-            buttons, text="Delete Entry", command=self.delete_entry
-        ).pack(side="left", expand=True, fill="x", padx=(4, 0))
+            buttons, text="Delete Entry",
+            command=self.delete_entry
+        ).grid(row=1, column=2, sticky="ew", padx=(4, 0))
+
+        # Make all three action columns expand equally
+        for column in range(3):
+            buttons.columnconfigure(column, weight=1)
 
     def toggle_session(self):
 
@@ -464,9 +530,9 @@ class PasswordManagerGUI:
         self.root.clipboard_clear()
         self.root.clipboard_append(value)
 
-        # Schedule clipboard clearing after 15 seconds
+        # Schedule clipboard clearing after 30 seconds
         self.clipboard_clear_job = self.root.after(
-            15000,
+            30000,
             lambda: self.clear_clipboard(value)
         )
 
@@ -551,6 +617,17 @@ class PasswordManagerGUI:
         self.detail_site.set("")
         self.detail_user.set("")
         self.detail_pass.set("")
+    
+    def clear_generated_password(self):
+        self.generated_entry.delete(0, tk.END)
+
+    def toggle_password_visibility(self, entry, button):
+        if entry.cget("show") == "*":
+            entry.configure(show="")
+            button.configure(text="Hide")
+        else:
+            entry.configure(show="*")
+            button.configure(text="Show")
 
 root = tk.Tk()
 app = PasswordManagerGUI(root)
