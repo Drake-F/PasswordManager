@@ -5,16 +5,19 @@ import json
 from tkinter import ttk, messagebox, filedialog
 from PasswordGenerator import generate_password
 from Encryption import encrypt_file, decrypt_file
+from pathlib import Path
 
-# Make a way for new users to create their first encrypted file - part of the installer/startup?
 # Finally, make it a desktop icon and package it all for github
+# Message boxes instead of logs for errors - a few in create new vault alone
+
+# Stop writing at all if path is not selected for new vault
 
 class PasswordManagerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Password Manager")
         self.root.geometry("920x650")
-        self.root.minsize(820, 580)
+        self.root.minsize(820, 880)
 
         self.entries = []
         self.session_active = False
@@ -145,6 +148,109 @@ class PasswordManagerGUI:
         ).grid(
             row=3, column=0, columnspan=3, sticky="w"
         )
+
+        # Adding a horizontal separator
+        separator = ttk.Separator(
+            frame,
+            orient="horizontal"
+        )
+        separator.grid(row=4, column=0, columnspan=3, sticky="ew", padx=10, pady=10)
+
+        # Creating a new vault
+        self.create_label = tk.StringVar(
+            value="Don't Have a Vault? Create one!:"
+        )
+
+        ttk.Label(
+            frame,
+            textvariable=self.create_label,
+            style="Status.TLabel"
+        ).grid(
+            row=5, column=0, columnspan=2, sticky="w"
+        )
+
+        self.create_button = ttk.Button(
+            frame,
+            text="Create Vault",
+            style="Action.TButton",
+            command=self.create_new_vault
+        )
+        self.create_button.grid(
+            row=5, column=2, columnspan=2, sticky="w"
+        )
+
+        ttk.Label(frame, text="New Vault Location:").grid(
+            row=6, column=0, sticky="w", padx=(0, 8), pady=5
+        )
+
+        self.new_vault_path = tk.StringVar()
+
+        self.vault_path_entry = ttk.Entry(
+            frame,
+            textvariable=self.new_vault_path,
+            state="readonly"
+        )
+        self.vault_path_entry.grid(
+            row=6, column=1, sticky="ew", pady=5
+        )
+
+        self.browse_button = ttk.Button(
+            frame,
+            text="Browse",
+            command=self.browse_new_vault
+        )
+        self.browse_button.grid(
+            row=6, column=2, padx=(5, 0), pady=5
+        )
+
+        # New vault password
+        self.new_vault_password = tk.StringVar()
+        ttk.Label(
+            frame,
+            text="New Vault Password:").grid(row=7, column=0, padx=(0, 8), pady=5)
+
+        self.new_vault_pass_entry = ttk.Entry(
+            frame,
+            textvariable=self.new_vault_password,
+            show="*"
+        )
+        self.new_vault_pass_entry.grid(row=7, column=1, pady=5, sticky="ew")
+
+        self.new_vault_pass_visibility_button = ttk.Button(
+            frame, 
+            text="Show",
+            command=lambda: self.toggle_password_visibility(
+                self.new_vault_pass_entry,
+                self.new_vault_pass_visibility_button
+            )
+        )
+        self.new_vault_pass_visibility_button.grid(row=7, column=2, padx=(5,0), pady=5)
+
+    def create_new_vault(self):
+        if not self.new_vault_path:
+            return
+
+        vault_path = Path(self.new_vault_path.get() + "/secret.enc")
+
+        if vault_path.exists():
+            messagebox.showerror("Error", "A vault already exists at this location.")
+            return
+
+        boilerplate = {
+            "version": 1,
+            "entries": []
+        }
+
+        plaintext = json.dumps(boilerplate, indent=4).encode("utf-8")
+
+        encrypt_file(
+            file_path=str(vault_path),
+            master_password=self.new_vault_password.get(),
+            plaintext=plaintext
+        )
+
+        self.new_vault_path.set("")
+        self.new_vault_password.set("")
     
     def browse_vault(self):
         file_path = filedialog.askopenfilename(
@@ -154,6 +260,14 @@ class PasswordManagerGUI:
 
         if file_path:
             self.vault_path.set(file_path)
+
+    def browse_new_vault(self):
+        directory = filedialog.askdirectory(
+            title="Select Vault Directory"
+        )
+
+        if directory:
+            self.new_vault_path.set(str(Path(directory)))
 
     def load_vault_file(self):
         # Decrypt selected vault
@@ -187,7 +301,7 @@ class PasswordManagerGUI:
             )
 
     def _build_generator_panel(self, parent):
-        frame = self._panel(parent, "Password Generator", 0, 1)
+        frame = self._panel(parent, "Password Generator", 1, 1)
         frame.columnconfigure(1, weight=1)
 
         ttk.Label(frame, text="Length:").grid(row=0, column=0, sticky="w", pady=4)
@@ -312,7 +426,7 @@ class PasswordManagerGUI:
         ).grid(row=5, column=0, columnspan=2, sticky="ew", padx=25)
 
     def _build_entries_panel(self, parent):
-        frame = self._panel(parent, "Entries", 1, 1)
+        frame = self._panel(parent, "Entries", 0, 1)
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(0, weight=1)
 
@@ -462,10 +576,6 @@ class PasswordManagerGUI:
                 ensure_ascii=False,
                 indent=4
             ).encode("utf-8")
-            print(plaintext)
-            print(type(plaintext))
-            print(self.entries)
-            print(type(self.entries))
 
             encrypt_file(
                 self.vault_path.get(),
@@ -594,17 +704,21 @@ class PasswordManagerGUI:
 
     def delete_entry(self):
         selection = self.tree.selection()
+
         if not selection:
             messagebox.showinfo("No Selection", "Select an entry to delete.")
             return
-        index = int(selection[0])
+
         if not messagebox.askyesno(
             "Delete Entry", "Permanently remove this entry from the current session?"
         ):
             return
 
+        index = self.tree.index(selection[0])
+
         self.entries.pop(index)
         self.tree.delete(selection[0])
+
         self.clear_selected_details()
         self.vault_modified = True
 
